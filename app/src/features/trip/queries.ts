@@ -1,6 +1,7 @@
-import { connection } from "next/server";
 import { fromDbDate, fromDbTime } from "@/lib/date";
+import { viewableTripWhere } from "@/server/authz";
 import { getPrisma, isUuid } from "@/server/db";
+import { requireUser } from "@/server/session";
 import type { TripDetail, TripSummary, TripView } from "./types";
 
 type TripRow = {
@@ -26,8 +27,9 @@ function toTripView(trip: TripRow): TripView {
 }
 
 export async function listTrips(): Promise<TripSummary[]> {
-  await connection();
+  const user = await requireUser();
   const trips = await getPrisma().trip.findMany({
+    where: viewableTripWhere(user.id),
     orderBy: [{ startDate: "desc" }, { createdAt: "desc" }],
     include: { _count: { select: { places: true, scheduleItems: true } } },
   });
@@ -39,19 +41,21 @@ export async function listTrips(): Promise<TripSummary[]> {
 }
 
 export async function getTrip(tripId: string): Promise<TripView | null> {
-  await connection();
+  const user = await requireUser();
   if (!isUuid(tripId)) return null;
-  const trip = await getPrisma().trip.findUnique({ where: { id: tripId } });
+  const trip = await getPrisma().trip.findFirst({
+    where: { id: tripId, ...viewableTripWhere(user.id) },
+  });
   return trip ? toTripView(trip) : null;
 }
 
 export async function getTripDetail(
   tripId: string,
 ): Promise<TripDetail | null> {
-  await connection();
+  const user = await requireUser();
   if (!isUuid(tripId)) return null;
-  const trip = await getPrisma().trip.findUnique({
-    where: { id: tripId },
+  const trip = await getPrisma().trip.findFirst({
+    where: { id: tripId, ...viewableTripWhere(user.id) },
     include: {
       // PostgreSQL の enum は定義順（MUST → WANT → MAYBE）で並ぶ
       places: {

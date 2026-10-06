@@ -1,4 +1,5 @@
 import { defineConfig, devices } from "@playwright/test";
+import { USERS } from "./e2e/users";
 
 const port = 3000;
 const baseURL = `http://localhost:${port}`;
@@ -13,9 +14,12 @@ export default defineConfig({
     trace: "on-first-retry",
   },
   projects: [
+    // テストユーザーを作成してログイン状態を保存する
+    { name: "setup", testMatch: /auth\.setup\.ts/ },
     {
       name: "mobile-chrome",
-      use: { ...devices["Pixel 7"] },
+      use: { ...devices["Pixel 7"], storageState: USERS.alice.storageState },
+      dependencies: ["setup"],
     },
   ],
   webServer: {

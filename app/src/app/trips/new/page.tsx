@@ -2,10 +2,12 @@ import type { Metadata } from "next";
 import { PageHeader } from "@/components/ui/page-header";
 import { createTrip } from "@/features/trip/actions";
 import { TripForm } from "@/features/trip/components/trip-form";
+import { requireUser } from "@/server/session";
 
 export const metadata: Metadata = { title: "旅行を作成 | tabiori" };
 
-export default function NewTripPage() {
+export default async function NewTripPage() {
+  await requireUser();
   return (
     <>
       <PageHeader backHref="/trips" backLabel="旅行一覧" title="旅行を作成" />

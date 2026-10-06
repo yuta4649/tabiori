@@ -1,5 +1,5 @@
 import { PrismaPg } from "@prisma/adapter-pg";
-import { Prisma, PrismaClient } from "@/generated/prisma/client";
+import { PrismaClient } from "@/generated/prisma/client";
 import { getEnv } from "@/lib/env";
 
 const globalForPrisma = globalThis as unknown as { prisma?: PrismaClient };
@@ -11,14 +11,6 @@ export function getPrisma(): PrismaClient {
     globalForPrisma.prisma = new PrismaClient({ adapter });
   }
   return globalForPrisma.prisma;
-}
-
-// update / delete の対象が存在しない（または別の旅行に属している）場合のエラー
-export function isRecordNotFound(error: unknown): boolean {
-  return (
-    error instanceof Prisma.PrismaClientKnownRequestError &&
-    error.code === "P2025"
-  );
 }
 
 const UUID_PATTERN =

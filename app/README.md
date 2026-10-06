@@ -13,12 +13,21 @@ AWS リソースはここでは扱わない。インフラは [`../infra`](../in
 ## セットアップ
 
 ```bash
-cp .env.example .env
-pnpm install        # postinstall で Prisma Client を生成
-pnpm db:up          # PostgreSQL を Docker Compose で起動
-pnpm db:migrate     # マイグレーションを適用し、Prisma Client を再生成
-pnpm dev            # http://localhost:3000
+cp .env.example .env  # BETTER_AUTH_SECRET に `openssl rand -base64 32` の値を設定する
+pnpm install          # postinstall で Prisma Client を生成
+pnpm db:up            # PostgreSQL を Docker Compose で起動
+pnpm db:migrate       # マイグレーションを適用し、Prisma Client を再生成
+pnpm user:create --email you@example.com --name あなた  # ログイン用ユーザーを作成（パスワードは対話入力）
+pnpm dev              # http://localhost:3000
 ```
+
+## 認証
+
+- Better Auth のメールアドレス + パスワード認証。画面からの新規登録は無効にしている
+- ユーザーは `pnpm user:create` で作成する。既存のメールアドレスを指定するとパスワードを更新する
+- 未ログインでアクセスすると `/login?next=...` に移動し、ログイン後は元のページ（指定がなければ `/trips`）に戻る
+- 旅行データへのアクセス範囲は `src/server/authz.ts` に集約している。queries と Server Actions は必ず `requireUser()` とこの条件を通す
+- スマホ実機から LAN の IP アドレスでアクセスする場合は、そのオリジンを `BETTER_AUTH_TRUSTED_ORIGINS` に追加する
 
 ## コマンド
 
@@ -28,18 +37,18 @@ pnpm dev            # http://localhost:3000
 | `pnpm build` / `pnpm start` | 本番ビルド / 起動 |
 | `pnpm lint` | ESLint |
 | `pnpm typecheck` | ルート型を生成して `tsc --noEmit` |
-| `pnpm test` | Vitest（ユニットテスト） |
-| `pnpm test:e2e` | Playwright（`pnpm db:up` 済みであること。初回は `pnpm exec playwright install chromium`） |
+| `pnpm test` | Vitest。`*.db.test.ts`（認可の結合テスト）はローカルの PostgreSQL を使う |
+| `pnpm test:e2e` | Playwright。テストユーザー（`*@tabiori.test`）を自動作成する（初回は `pnpm exec playwright install chromium`） |
+| `pnpm user:create` | ログイン用ユーザーの作成・パスワード更新 |
 | `pnpm db:up` / `pnpm db:down` | PostgreSQL の起動 / 停止 |
 | `pnpm db:migrate` | `prisma migrate dev` の後に `prisma generate`（Prisma 7 は自動生成しないため） |
 | `pnpm db:generate` | Prisma Client の再生成 |
 
 ## 画面
 
-認証はまだないため、ローカルでは誰でも全データを操作できる。
-
 | パス | 画面 |
 |---|---|
+| `/login` | ログイン |
 | `/trips` | 旅行一覧（旅行中 / これから / 過去） |
 | `/trips/new` | 旅行を作成 |
 | `/trips/[tripId]` | しおり（旅行概要・日付ごとのスケジュール・行きたい場所） |
@@ -60,6 +69,8 @@ pnpm dev            # http://localhost:3000
 docker build -t tabiori-app .
 docker run --rm -p 3000:3000 \
   -e DATABASE_URL=postgresql://tabiori:tabiori@host.docker.internal:5432/tabiori \
+  -e BETTER_AUTH_SECRET="$(openssl rand -base64 32)" \
+  -e BETTER_AUTH_URL=http://localhost:3000 \
   tabiori-app
 ```
 

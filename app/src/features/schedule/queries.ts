@@ -1,16 +1,17 @@
-import { connection } from "next/server";
 import { fromDbDate, fromDbTime } from "@/lib/date";
+import { viewableTripWhere } from "@/server/authz";
 import { getPrisma, isUuid } from "@/server/db";
+import { requireUser } from "@/server/session";
 import type { ScheduleItemView } from "@/features/trip/types";
 
 export async function getScheduleItem(
   tripId: string,
   itemId: string,
 ): Promise<ScheduleItemView | null> {
-  await connection();
+  const user = await requireUser();
   if (!isUuid(tripId) || !isUuid(itemId)) return null;
   const item = await getPrisma().scheduleItem.findFirst({
-    where: { id: itemId, tripId },
+    where: { id: itemId, tripId, trip: viewableTripWhere(user.id) },
     include: { place: { select: { id: true, name: true } } },
   });
   if (!item) return null;

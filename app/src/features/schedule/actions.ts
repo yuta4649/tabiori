@@ -4,7 +4,9 @@ import { revalidatePath } from "next/cache";
 import { notFound, redirect } from "next/navigation";
 import { fromDbDate, isDateString, toDbDate, toDbTime } from "@/lib/date";
 import { readForm, toFormErrors, type FormState } from "@/lib/form";
-import { getPrisma, isRecordNotFound, isUuid } from "@/server/db";
+import { editableTripWhere } from "@/server/authz";
+import { getPrisma, isUuid } from "@/server/db";
+import { requireUser } from "@/server/session";
 import {
   scheduleItemFields,
   scheduleItemSchema,
@@ -24,15 +26,16 @@ function toData(input: ScheduleItemInput) {
   };
 }
 
-// 旅行期間内の日付か、選ばれた行きたい場所がこの旅行のものかを確認する
+// 編集できる旅行か、旅行期間内の日付か、選ばれた行きたい場所がこの旅行のものかを確認する
 async function validateAgainstTrip(
+  userId: string,
   tripId: string,
   input: ScheduleItemInput,
   values: Record<string, string>,
 ): Promise<FormState | null> {
   const prisma = getPrisma();
-  const trip = await prisma.trip.findUnique({
-    where: { id: tripId },
+  const trip = await prisma.trip.findFirst({
+    where: { id: tripId, ...editableTripWhere(userId) },
     select: { startDate: true, endDate: true },
   });
   if (!trip) notFound();
@@ -59,12 +62,13 @@ export async function createScheduleItem(
   _prev: FormState,
   formData: FormData,
 ): Promise<FormState> {
+  const user = await requireUser();
   if (!isUuid(tripId)) notFound();
   const values = readForm(formData, scheduleItemFields);
   const parsed = scheduleItemSchema.safeParse(values);
   if (!parsed.success) return toFormErrors(parsed.error, values);
 
-  const invalid = await validateAgainstTrip(tripId, parsed.data, values);
+  const invalid = await validateAgainstTrip(user.id, tripId, parsed.data, values);
   if (invalid) return invalid;
 
   await getPrisma().scheduleItem.create({
@@ -81,23 +85,20 @@ export async function updateScheduleItem(
   _prev: FormState,
   formData: FormData,
 ): Promise<FormState> {
+  const user = await requireUser();
   if (!isUuid(tripId) || !isUuid(itemId)) notFound();
   const values = readForm(formData, scheduleItemFields);
   const parsed = scheduleItemSchema.safeParse(values);
   if (!parsed.success) return toFormErrors(parsed.error, values);
 
-  const invalid = await validateAgainstTrip(tripId, parsed.data, values);
+  const invalid = await validateAgainstTrip(user.id, tripId, parsed.data, values);
   if (invalid) return invalid;
 
-  try {
-    await getPrisma().scheduleItem.update({
-      where: { id: itemId, tripId },
-      data: toData(parsed.data),
-    });
-  } catch (error) {
-    if (isRecordNotFound(error)) notFound();
-    throw error;
-  }
+  const { count } = await getPrisma().scheduleItem.updateMany({
+    where: { id: itemId, tripId, trip: editableTripWhere(user.id) },
+    data: toData(parsed.data),
+  });
+  if (count === 0) notFound();
 
   revalidatePath(`/trips/${tripId}`);
   redirect(dayPath(tripId, parsed.data.date));
@@ -108,8 +109,12 @@ export async function deleteScheduleItem(
   itemId: string,
   date: string,
 ): Promise<void> {
+  const user = await requireUser();
   if (!isUuid(tripId) || !isUuid(itemId)) notFound();
-  await getPrisma().scheduleItem.deleteMany({ where: { id: itemId, tripId } });
+  const { count } = await getPrisma().scheduleItem.deleteMany({
+    where: { id: itemId, tripId, trip: editableTripWhere(user.id) },
+  });
+  if (count === 0) notFound();
 
   revalidatePath(`/trips/${tripId}`);
   redirect(isDateString(date) ? dayPath(tripId, date) : `/trips/${tripId}`);

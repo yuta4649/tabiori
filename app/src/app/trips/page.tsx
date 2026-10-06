@@ -1,11 +1,13 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { PageHeader } from "@/components/ui/page-header";
+import { LogoutButton } from "@/features/auth/components/logout-button";
 import { buttonClass } from "@/components/ui/styles";
 import { listTrips } from "@/features/trip/queries";
 import { tripStatus, type TripStatus } from "@/features/trip/status";
 import type { TripSummary } from "@/features/trip/types";
 import { dayIndex, formatDateRange } from "@/lib/date";
+import { requireUser } from "@/server/session";
 
 export const metadata: Metadata = { title: "旅行一覧 | tabiori" };
 
@@ -16,7 +18,7 @@ const SECTIONS: { status: TripStatus; title: string }[] = [
 ];
 
 export default async function TripsPage() {
-  const trips = await listTrips();
+  const [user, trips] = await Promise.all([requireUser(), listTrips()]);
   const now = new Date();
   const grouped = Map.groupBy(trips, (trip) => tripStatus(trip, now));
   // これからの旅行は近い順に並べる（取得時は開始日の新しい順）
@@ -66,6 +68,10 @@ export default async function TripsPage() {
           })
         )}
       </main>
+      <footer className="mx-auto flex w-full max-w-lg items-center justify-between gap-2 border-t border-neutral-200 px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] text-sm text-neutral-600 dark:border-neutral-800 dark:text-neutral-400">
+        <span className="min-w-0 truncate">{user.name} でログイン中</span>
+        <LogoutButton />
+      </footer>
     </>
   );
 }
