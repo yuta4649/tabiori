@@ -1,0 +1,23 @@
+# ローカル開発用 PostgreSQL。Next.js はホスト側で `pnpm dev` する。
+name: tabiori
+
+services:
+  db:
+    # 本番の Aurora PostgreSQL とメジャーバージョンを揃える
+    image: postgres:17
+    environment:
+      POSTGRES_USER: tabiori
+      POSTGRES_PASSWORD: tabiori
+      POSTGRES_DB: tabiori
+    ports:
+      - "5432:5432"
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tabiori -d tabiori"]
+      interval: 2s
+      timeout: 5s
+      retries: 15
+
+volumes:
+  db-data:
