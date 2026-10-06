@@ -6,3 +6,72 @@ generator client {
 datasource db {
   provider = "postgresql"
 }
+
+// 日付（@db.Date）と時刻（@db.Time）は旅行先の現地時間として保存する。
+// どのタイムゾーンの現地時間かは Trip.timezone（IANA 名）で決まる。
+
+model Trip {
+  id          String   @id @default(uuid(7)) @db.Uuid
+  title       String
+  destination String
+  startDate   DateTime @map("start_date") @db.Date
+  endDate     DateTime @map("end_date") @db.Date
+  timezone    String   @default("Asia/Tokyo")
+  memo        String?
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  places        Place[]
+  scheduleItems ScheduleItem[]
+
+  @@map("trips")
+}
+
+enum PlacePriority {
+  MUST
+  WANT
+  MAYBE
+
+  @@map("place_priority")
+}
+
+// 行きたい場所。スケジュールとは独立して管理し、予定から任意で参照される。
+model Place {
+  id        String        @id @default(uuid(7)) @db.Uuid
+  tripId    String        @map("trip_id") @db.Uuid
+  name      String
+  address   String?
+  url       String?
+  memo      String?
+  priority  PlacePriority @default(WANT)
+  createdAt DateTime      @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime      @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  trip          Trip           @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  scheduleItems ScheduleItem[]
+
+  @@index([tripId])
+  @@map("places")
+}
+
+model ScheduleItem {
+  id        String    @id @default(uuid(7)) @db.Uuid
+  tripId    String    @map("trip_id") @db.Uuid
+  placeId   String?   @map("place_id") @db.Uuid
+  date      DateTime  @db.Date
+  startTime DateTime? @map("start_time") @db.Time(0)
+  endTime   DateTime? @map("end_time") @db.Time(0)
+  title     String
+  location  String?
+  memo      String?
+  url       String?
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  trip  Trip   @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  place Place? @relation(fields: [placeId], references: [id], onDelete: SetNull)
+
+  @@index([tripId, date, startTime])
+  @@index([placeId])
+  @@map("schedule_items")
+}
